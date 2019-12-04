@@ -50,9 +50,9 @@ let main argv =
 
     let getStdOutHandle = 
         GetStdHandle(STD_OUTPUT_HANDLE)
-        |> fun x -> match x with
-        | INVALID_HANDLE_VALUE -> Error ("Invalid handle")
-        | _ -> Ok x
+        |> function
+            | value when value = INVALID_HANDLE_VALUE -> Error ("Invalid handle")
+            | value -> Ok value
     
     let getCurrentConsoleFontInfo hnd =
         let mutable info = CONSOLE_FONT_INFO_EX()
