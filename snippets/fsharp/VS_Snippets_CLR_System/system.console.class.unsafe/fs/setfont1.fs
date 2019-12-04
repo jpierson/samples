@@ -47,38 +47,47 @@ extern bool internal SetCurrentConsoleFontEx(
 [<EntryPoint>]
 let main argv =
     let fontName = "Lucida Console";
-    let hnd = GetStdHandle(STD_OUTPUT_HANDLE);
-    if hnd <> INVALID_HANDLE_VALUE
-        then
-            let mutable info = CONSOLE_FONT_INFO_EX()
-            info.cbSize <- uint32 (Marshal.SizeOf(info));
-            let mutable tt = false;
-            // First determine whether there's already a TrueType font.
-            if (GetCurrentConsoleFontEx(hnd, false, info)) 
-                then
-                    let tt = ((info.FontFamily) &&& TMPF_TRUETYPE) = TMPF_TRUETYPE
-                    if (tt)
-                        then
-                           Console.WriteLine("The console already is using a TrueType font.")
-                           0
-                        else
-                            // Set console font to Lucida Console.
-                            let mutable newInfo = CONSOLE_FONT_INFO_EX()
-                            newInfo.cbSize <- uint32 (Marshal.SizeOf(newInfo))          
-                            newInfo.FontFamily <- TMPF_TRUETYPE
-                            newInfo.FaceName <- fontName
-                            // Get some settings from current font.
-                            newInfo.dwFontSize <- COORD(info.dwFontSize.X, info.dwFontSize.Y)
-                            newInfo.FontWeight <- info.FontWeight
-                            SetCurrentConsoleFontEx(hnd, false, newInfo) |> ignore
-                            Console.WriteLine("The console is now using a TrueType font.")
 
-                            0
-                else 
-                    Console.WriteLine("TODO: Call failed to GetCurrentConsoleFontEx.")
-                    0
-    else
-        Console.WriteLine("TODO: Call failed to GetStdHandle.")
-        0
+    let getStdOutHandle = 
+        GetStdHandle(STD_OUTPUT_HANDLE)
+        |> fun x -> match x with
+        | INVALID_HANDLE_VALUE -> Error ("Invalid handle")
+        | _ -> Ok x
+    
+    let getCurrentConsoleFontInfo hnd =
+        let mutable info = CONSOLE_FONT_INFO_EX()
+        info.cbSize <- uint32 (Marshal.SizeOf(info));
+        // First determine whether there's already a TrueType font.
+        if GetCurrentConsoleFontEx(hnd, false, info)
+        then Ok info 
+        else Error "Failed call to GetCurrentConsoleFontEx"
+
+    let isTrueTypeFont (info : CONSOLE_FONT_INFO_EX) =
+        if ((info.FontFamily) &&& TMPF_TRUETYPE) = TMPF_TRUETYPE
+        then Ok info 
+        else (Error "The console already is using a TrueType font.")
+
+    let setConsoleFontToLucidaConsole (consoleOutput: IntPtr) (info : CONSOLE_FONT_INFO_EX) =
+        let mutable newInfo = CONSOLE_FONT_INFO_EX()
+        newInfo.cbSize <- uint32 (Marshal.SizeOf(newInfo))          
+        newInfo.FontFamily <- TMPF_TRUETYPE
+        newInfo.FaceName <- fontName
+        // Get some settings from current font.
+        newInfo.dwFontSize <- COORD(info.dwFontSize.X, info.dwFontSize.Y)
+        newInfo.FontWeight <- info.FontWeight
+        SetCurrentConsoleFontEx(consoleOutput, false, newInfo) |> ignore
+
+
+    getStdOutHandle 
+    |> Result.map (fun hnd -> 
+        Result.bind getCurrentConsoleFontInfo
+        >> Result.bind isTrueTypeFont
+        >> Result.bind ((setConsoleFontToLucidaConsole hnd) >> fun _ -> Ok ())
+        >> Result.map (fun _ -> Console.WriteLine("The console is now using a TrueType font."))
+        >> Result.mapError (fun message -> Console.WriteLine(message))
+    )
+    |> ignore
+    
+    0
    
 // </Snippet3>
